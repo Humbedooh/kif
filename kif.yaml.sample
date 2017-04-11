@@ -1,5 +1,9 @@
 # Example Kif rules file
+daemon:
+    # If daemonized, how often to run checks (in seconds):
+    interval:           300
 
+# The actual Kif rules:
 rules:
     postfix:
         description:     'postfix memory hogging prevention'

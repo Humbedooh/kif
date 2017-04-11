@@ -13,12 +13,13 @@ import socket
 import smtplib
 import email.mime.text
 import requests
+import time
 
 mb = (2 ** 20)
 gb = (2 ** 30)
 
 me = socket.gethostname()
-
+pidfile = "/var/run/kif.pid"
 
 def notifyEmail(fro, to, subject, msg):
     msg = email.mime.text.MIMEText(msg, _charset = "utf-8")
@@ -202,72 +203,225 @@ def scanForTriggers():
 # Get args, if any
 parser = argparse.ArgumentParser()
 parser.add_argument("-d", "--debug", help="Debug run (don't execute runlists)", action = 'store_true')
+parser.add_argument("-D", "--daemonize", help="Daemonize Kif", action = 'store_true')
+parser.add_argument("-s", "--stop", help="Stop the Kif daemon", action = 'store_true')
+parser.add_argument("-r", "--restart", help="Restart the Kif daemon", action = 'store_true')
 args = parser.parse_args()
 
-# Now actually run things
-err, runlist = scanForTriggers()
-if len(runlist) > 0:
-    goods = 0
-    bads = 0
-    
-    msgerr = ""
-    msgrl = ""
-    if len(err) > 0:
-        print("Following triggers were detected:")
-        for item in err:
-            print("- %s" % item)
-            msgerr += "- %s\n" % item
-    print("Running triggered commands:")
-    for item in runlist:
-        print("- %s" % item)
-        msgrl += "- %s" % item
-        try:
-            if not args.debug:
-                subprocess.check_output(item, shell = True, stderr=subprocess.STDOUT)
-                msgrl += "(<kbd>success</kbd>)"
-            else:
-                print("(disabled due to --debug flag)")
-                msgrl += "(disabled due to --debug)"
-            goods += 1
-        except subprocess.CalledProcessError as e:
-            print("command failed: %s" % e.output)
-            msgrl += "(failed!: <kbd>%s</kbd>)" % e.output
-            bads += 1
-        msgrl += "\n"
-    print("%u calls succeeded, %u failed." % (goods, bads))
-
-    if 'notifications' in config and 'email' in config['notifications']:
-        ecfg = config['notifications']['email']
-        if 'rcpt' in ecfg and 'from' in ecfg:
-            subject = "[KIF] %s: triggered %u events" % (me, len(runlist))
-            msg = """Hullo there,
-
-KIF has detectect the following issues on %s:
-
-%s
-
-As a precaution, the following commands were run to fix issues:
-
-%s
-
-With regards and sighs,
-Your loyal KIF service.
-            """ % (me, msgerr, msgrl)
-            notifyEmail(ecfg['from'], ecfg['rcpt'], subject, msg)
-    if 'notifications' in config and 'hipchat' in config['notifications']:
-        hcfg = config['notifications']['hipchat']
-        if 'token' in hcfg and 'room' in hcfg:
-            msg = """KIF has detectect the following issues on %s:<br/>
-<pre>
-%s
-</pre><br/>
-As a precaution, the following commands were run to fix issues:<br/>
-<pre>
-%s
-</pre><br/>
-With regards and sighs,<br/>
-Your loyal KIF service.
-            """ % (me, msgerr, msgrl)
-            notifyHipchat(hcfg['room'], hcfg['token'], msg)
+def main():
+    # Now actually run things
+    err, runlist = scanForTriggers()
+    if len(runlist) > 0:
+        goods = 0
+        bads = 0
         
-print("KIF run finished!")
+        msgerr = ""
+        msgrl = ""
+        if len(err) > 0:
+            print("Following triggers were detected:")
+            for item in err:
+                print("- %s" % item)
+                msgerr += "- %s\n" % item
+        print("Running triggered commands:")
+        for item in runlist:
+            print("- %s" % item)
+            msgrl += "- %s" % item
+            try:
+                if not args.debug:
+                    subprocess.check_output(item, shell = True, stderr=subprocess.STDOUT)
+                    msgrl += "(<kbd>success</kbd>)"
+                else:
+                    print("(disabled due to --debug flag)")
+                    msgrl += "(disabled due to --debug)"
+                goods += 1
+            except subprocess.CalledProcessError as e:
+                print("command failed: %s" % e.output)
+                msgrl += "(failed!: <kbd>%s</kbd>)" % e.output
+                bads += 1
+            msgrl += "\n"
+        print("%u calls succeeded, %u failed." % (goods, bads))
+    
+        if 'notifications' in config and 'email' in config['notifications']:
+            ecfg = config['notifications']['email']
+            if 'rcpt' in ecfg and 'from' in ecfg:
+                subject = "[KIF] %s: triggered %u events" % (me, len(runlist))
+                msg = """Hullo there,
+    
+    KIF has detectect the following issues on %s:
+    
+    %s
+    
+    As a precaution, the following commands were run to fix issues:
+    
+    %s
+    
+    With regards and sighs,
+    Your loyal KIF service.
+                """ % (me, msgerr, msgrl)
+                notifyEmail(ecfg['from'], ecfg['rcpt'], subject, msg)
+        if 'notifications' in config and 'hipchat' in config['notifications']:
+            hcfg = config['notifications']['hipchat']
+            if 'token' in hcfg and 'room' in hcfg:
+                msg = """KIF has detectect the following issues on %s:<br/>
+    <pre>
+    %s
+    </pre><br/>
+    As a precaution, the following commands were run to fix issues:<br/>
+    <pre>
+    %s
+    </pre><br/>
+    With regards and sighs,<br/>
+    Your loyal KIF service.
+                """ % (me, msgerr, msgrl)
+                notifyHipchat(hcfg['room'], hcfg['token'], msg)
+            
+    print("KIF run finished!")
+    
+class Daemonize:
+	"""A generic daemon class.
+
+	Usage: subclass the daemon class and override the run() method."""
+
+	def __init__(self, pidfile): self.pidfile = pidfile
+	
+	def daemonize(self):
+		"""Deamonize class. UNIX double fork mechanism."""
+
+		try: 
+			pid = os.fork() 
+			if pid > 0:
+				# exit first parent
+				sys.exit(0) 
+		except OSError as err: 
+			sys.stderr.write('fork #1 failed: {0}\n'.format(err))
+			sys.exit(1)
+	
+		# decouple from parent environment
+		os.chdir('/') 
+		os.setsid() 
+		os.umask(0) 
+	
+		# do second fork
+		try: 
+			pid = os.fork() 
+			if pid > 0:
+
+				# exit from second parent
+				sys.exit(0) 
+		except OSError as err: 
+			sys.stderr.write('fork #2 failed: {0}\n'.format(err))
+			sys.exit(1) 
+	
+		# redirect standard file descriptors
+		sys.stdout.flush()
+		sys.stderr.flush()
+		si = open(os.devnull, 'r')
+		so = open(os.devnull, 'a+')
+		se = open(os.devnull, 'a+')
+
+		os.dup2(si.fileno(), sys.stdin.fileno())
+		os.dup2(so.fileno(), sys.stdout.fileno())
+		os.dup2(se.fileno(), sys.stderr.fileno())
+	
+		# write pidfile
+		atexit.register(self.delpid)
+
+		pid = str(os.getpid())
+		with open(self.pidfile,'w+') as f:
+			f.write(pid + '\n')
+	
+	def delpid(self):
+		os.remove(self.pidfile)
+
+	def start(self, args):
+		"""Start the daemon."""
+
+		# Check for a pidfile to see if the daemon already runs
+		try:
+			with open(self.pidfile,'r') as pf:
+
+				pid = int(pf.read().strip())
+		except IOError:
+			pid = None
+	
+		if pid:
+			message = "pidfile {0} already exist. " + \
+					"Daemon already running?\n"
+			sys.stderr.write(message.format(self.pidfile))
+			sys.exit(1)
+		
+		# Start the daemon
+		self.daemonize()
+		self.run(args)
+
+	def stop(self):
+		"""Stop the daemon."""
+
+		# Get the pid from the pidfile
+		try:
+			with open(self.pidfile,'r') as pf:
+				pid = int(pf.read().strip())
+		except IOError:
+			pid = None
+	
+		if not pid:
+			message = "pidfile {0} does not exist. " + \
+					"Daemon not running?\n"
+			sys.stderr.write(message.format(self.pidfile))
+			return # not an error in a restart
+
+		# Try killing the daemon process	
+		try:
+			while 1:
+				os.kill(pid, signal.SIGTERM)
+				time.sleep(0.1)
+		except OSError as err:
+			e = str(err.args)
+			if e.find("No such process") > 0:
+				if os.path.exists(self.pidfile):
+					os.remove(self.pidfile)
+			else:
+				print (str(err.args))
+				sys.exit(1)
+
+	def restart(self):
+		"""Restart the daemon."""
+		self.stop()
+		self.start()
+
+	def run(self):
+		"""You should override this method when you subclass Daemon.
+		
+		It will be called after the process has been daemonized by 
+		start() or restart()."""
+
+if os.getuid() != 0:
+    print("Kif must be run as root!")
+    sys.exit(-1)
+    
+## Daemon class
+class MyDaemon(Daemonize):
+    def run(self, args):
+        interval = 300
+        if 'daemon' in config and 'interval' in config['daemon']:
+            interval = int(config['daemon']['interval'])
+        while True:
+            main()
+            time.sleep(interval)
+        
+# Get started!
+if args.stop:
+    print("Stopping Kif")
+    daemon = MyDaemon(pidfile)
+    daemon.stop()
+if args.restart:
+    print("Restarting Kif")
+    daemon = MyDaemon(pidfile)
+    daemon.restart()
+else:   
+    if args.daemonize:
+        print("Daemonizing...")
+        daemon = MyDaemon(pidfile)
+        daemon.start(args)
+    else:
+        main()
