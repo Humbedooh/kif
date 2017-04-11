@@ -4,13 +4,15 @@
 Kif is a simple monitoring program that detects programs running amok and tries to correct them.
 It can currently scan for:
 
-- memory usage (MB, GB or % of total mem available)
+- Memory usage (MB, GB or % of total mem available)
 - No. of open file descriptors
 - No. of TCP connections open
 - No. of LAN TCP connections open
 - Age of process
 
 and act accordingly, either running a custom command (such as restarting a service) or kill it with any preferred signal.
+
+See [kif.sample.yaml](kif.sample.yaml) for example configuration.
 
 ## Requirements:
 - python2.7
