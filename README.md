@@ -16,4 +16,12 @@ It can scan for memory usage, file descriptors and connections (both local and g
 - Run as root (required to both read usage and restart services).
 - Enjoy!
 
+### Command line arguments:
+
+- `--debug`: Run in debug mode - detect but don't try to fix issues.
+- `--daemonize`: Run as a daemonized process in the background
+- `--stop`: If daemonized, stop the daemon
+- `--restart`: Again, if daemon, restart it
+- `--config`: path to config file.
+
 
