@@ -23,6 +23,7 @@ gb = (2 ** 30)
 
 me = socket.gethostname()
 pidfile = "/var/run/kif.pid"
+config = None
 
 def notifyEmail(fro, to, subject, msg):
     msg = email.mime.text.MIMEText(msg, _charset = "utf-8")
@@ -87,7 +88,7 @@ def getprocs():
             continue
     return procs
 
-config = yaml.load(open("kif.yaml"))
+
 
 def checkTriggers(id, alist, triggers):
     for trigger, value in triggers.iteritems():
@@ -209,7 +210,13 @@ parser.add_argument("-d", "--debug", help="Debug run (don't execute runlists)", 
 parser.add_argument("-D", "--daemonize", help="Daemonize Kif", action = 'store_true')
 parser.add_argument("-s", "--stop", help="Stop the Kif daemon", action = 'store_true')
 parser.add_argument("-r", "--restart", help="Restart the Kif daemon", action = 'store_true')
+parser.add_argument("-c", "--config", help="Path to the config file if not in ./kif.yaml")
 args = parser.parse_args()
+
+if not args.config:
+    config = yaml.load(open("kif.yaml"))
+else:
+    config = yaml.load(open(args.config))
 
 def main():
     global config
