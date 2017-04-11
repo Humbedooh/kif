@@ -32,6 +32,6 @@ See [kif.sample.yaml](kif.sample.yaml) for example configuration.
 - `--daemonize`: Run as a daemonized process in the background
 - `--stop`: If daemonized, stop the daemon
 - `--restart`: Again, if daemon, restart it
-- `--config`: path to config file.
+- `--config $filename`: path to config file.
 
 
