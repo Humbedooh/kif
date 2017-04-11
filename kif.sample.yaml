@@ -42,7 +42,19 @@ rules:
             maxlocalconns:  500
         runlist:
             - 'service apache2 restart'
-            
+    
+    puppet:
+        description:    'kill -9 puppet agents that are zombified'
+        procid: 'puppet agent'
+        # Find all processes created more than 1 day ago.
+        triggers:
+            maxage: 1d
+        # Ignore main process
+        ignorepidfile:  '/var/run/puppet/agent.pid'
+        # Kill it with signal 9
+        kill:           true
+        killwith:       9
+        
 # Notification options
 notifications:
     # HipChat support:
