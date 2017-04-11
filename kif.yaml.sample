@@ -1,0 +1,56 @@
+# Example Kif rules file
+
+rules:
+    postfix:
+        description:     'postfix memory hogging prevention'
+        procid:          '/usr/lib/postfix/master'
+        triggers:
+            maxmemory:   50%
+            maxfds:      10240
+        runlist:
+            - 'service postfix restart'
+    slapd:
+        description:     'LDAP memory hogging prevention'
+        procid:          '/usr/sbin/slapd'
+        triggers:
+            maxmemory:   50%
+            maxfds:      1024
+        runlist:
+            - 'service slapd restart'
+    elastic:
+        description:     'ElasticSearch OOM'
+        procid:          '/usr/share/elasticsearch/lib/elasticsearch-5.3.0.jar'
+        triggers:
+            maxmemory:   34gb
+            maxfds:      99999
+        runlist:
+            - 'service elasticsearch restart'
+    httpd:
+        description:     'httpd too many backend connections (pool filling up?)'
+        # We can also specify the exact cmdline and args to scan for:
+        procid: 
+            - '/usr/sbin/apache2'
+            - '-k'
+            - 'start'
+        # Use combine: true to combine the resource of multiple processes into one check.
+        combine:            true
+        triggers:
+            maxlocalconns:  500
+        runlist:
+            - 'service apache2 restart'
+            
+# Notification options
+notifications:
+    # HipChat support:
+    hipchat:
+        room:  '123456'
+        token:  'abcdef1234567890'
+        notify: false
+    # Standard email support
+    email:
+        rcpt:  'team@example.org'
+        from:  'KIF <kif@example.org>'
+
+# Do we need to log this to a file?
+logging:
+    logfile: /var/log/kif.log
