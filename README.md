@@ -2,7 +2,15 @@
 ### KIF: Kill It (with) Fire - A simple monitoring program with a yaml configuration
 
 Kif is a simple monitoring program that detects programs running amok and tries to correct them.
-It can scan for memory usage, file descriptors and connections (both local and global) and act if they reach a certain threshold. 
+It can currently scan for:
+
+- memory usage (MB, GB or % of total mem available)
+- # of open file descriptors
+- # of TCP connections open
+- # of LAN TCP connections open
+- Age of process
+
+and act accordingly, either running a custom command (such as restarting a service) or kill it with any preferred signal.
 
 ## Requirements:
 - python2.7
