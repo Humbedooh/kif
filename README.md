@@ -12,9 +12,11 @@ and tries to correct them. It can currently scan for:
 - State of process (running, waiting, zombie etc)
 
 and act accordingly, either running a custom command (such as restarting
-a service) or killing it with any preferred signal.
+a service) or killing it with any preferred signal. It can also notify
+you of issues found and actions taken, either via email or hipchat.
 
-See [kif.sample.yaml](kif.sample.yaml) for example configuration.
+See [kif.sample.yaml](kif.sample.yaml) for example configuration and
+features.
 
 ## Requirements:
 - python 2.7+ (3.x will work)
