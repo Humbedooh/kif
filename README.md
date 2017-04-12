@@ -9,6 +9,7 @@ It can currently scan for:
 - No. of TCP connections open
 - No. of LAN TCP connections open
 - Age of process
+- State of process (running, waiting, zombie etc)
 
 and act accordingly, either running a custom command (such as restarting a service) or kill it with any preferred signal.
 
