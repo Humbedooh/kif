@@ -85,17 +85,16 @@ def getcons(pid, lan = False):
                     lancons += 1
         return lancons
 
-# getprocs: hackish way of getting all running commands and their PIDs
+# getprocs: Get all processes and their command line stack
 def getprocs():
     procs = {}
-    for dirname in os.listdir('/proc'):
+    for pid in psutil.pids():
         try:
-            pid = int(dirname)
-            with open('/proc/%u/cmdline' % pid, mode='rb') as fd:
-                content = fd.read().decode().split('\x00')
-                if len(content) > 0 and len(content[0]) > 0:
-                    content = [c for c in content if len(c) > 0]
-                    procs[pid] = content
+            p = psutil.Process(pid)
+            content = p.cmdline()
+            if len(content) > 0 and len(content[0]) > 0:
+                content = [c for c in content if len(c) > 0]
+                procs[pid] = content
         except Exception:
             continue
     return procs
