@@ -46,8 +46,12 @@ rules:
         triggers:
             # Demand no more than 500 LAN connections
             maxlocalconns:  500
+            # No more than 25,000 open connections in total
+            maxconns:       25000
             # Require < 1GB memory used (could also be 10%, 512mb etc)
             maxmemory:      1gb
+            # And finally, no mor than 65,000 open file descriptors
+            maxfds:         65000
         # If triggered, run this:
         runlist:
             - 'service apache2 restart'
