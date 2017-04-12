@@ -62,6 +62,18 @@ rules:
         # No runlist here, just kill it with signal 9
         kill:           true
         killwith:       9
+        
+    puppet:
+        description:    'kill -9 puppet agents that are hanging'
+        procid: 'puppet agent'
+        # Find all processes created more than 1 day ago.
+        triggers:
+            maxage: 1d
+        # Ignore main process
+        ignorepidfile:  '/var/run/puppet/agent.pid'
+        # Kill it with signal 9
+        kill:           true
+        killwith:       9
 ```
 
 ### Command line arguments:
