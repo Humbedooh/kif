@@ -30,6 +30,40 @@ features.
 - Run as root (required to both read usage and restart services).
 - Enjoy!
 
+### Rule syntax:
+
+```yaml
+rules:
+    apache:
+        description:     'sample apache process rule'
+        # We can specify the exact cmdline and args to scan for:
+        procid: 
+            - '/usr/sbin/apache2'
+            - '-k'
+            - 'start'
+        # We'll use combine: true to combine the resource of multiple processes into one check.
+        combine:            true
+        triggers:
+            # Demand no more than 500 LAN connections
+            maxlocalconns:  500
+            # Require < 1GB memory used (could also be 10%, 512mb etc)
+            maxmemory:      1gb
+        # If triggered, run this:
+        runlist:
+            - 'service apache2 restart'
+            
+    zombies:
+        description:    'Any process caught in zombie mode'
+        # use empty procid to catch all
+        procid:         ''
+        triggers:
+            # This can be any process state (zombie, sleeping, running, etc)
+            state:      'zombie'
+        # No runlist here, just kill it with signal 9
+        kill:           true
+        killwith:       9
+```
+
 ### Command line arguments:
 
 - `--debug`: Run in debug mode - detect but don't try to fix issues.
