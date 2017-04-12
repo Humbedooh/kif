@@ -73,6 +73,10 @@ def getage(pid):
     proc = psutil.Process(pid)
     return proc.create_time()
 
+def getstate(pid):
+    proc = psutil.Process(pid)
+    return proc.status()
+
 def getcons(pid, lan = False):
     proc = psutil.Process(pid)
     if not lan:
@@ -181,6 +185,15 @@ def checkTriggers(id, alist, triggers):
             if cage > maxage:
                 print("Trigger fired!")
                 return lstr
+        
+        # state: kill processes in a specific state (zombie etc)
+        if trigger == 'state':
+            cstate = alist['process_state']
+            lstr ="Process '%s' is in state '%s'" % (id, cstate)
+            print(lstr)
+            if cstate == value:
+                print("Trigger fired!")
+                return lstr
     return None
 
 def scanForTriggers():
@@ -258,13 +271,17 @@ def scanForTriggers():
                 proca['connections'] = getcons(pid)
                 proca['connections_local'] = getcons(pid, True)
                 proca['process_age'] = time.time() - getage(pid)
+                proca['process_state'] = getstate(pid)
 
                 # If combining, combine into the analysis hash
                 if 'combine' in rule and rule['combine'] == True:
                     for k, v in proca.iteritems():
-                        if not k in analysis:
+                        if not k in analysis and ( isinstance(v, int) or isinstance(v, float) ):
                             analysis[k] = 0
-                        analysis[k] += v
+                        if ( isinstance(v, int) or isinstance(v, float) ):
+                            analysis[k] += v
+                        else:
+                            analysis[k] = ''
                 else:
                     # If running a per-pid test, run it:
                     err = checkTriggers(id, proca, rule['triggers'])

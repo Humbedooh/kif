@@ -42,9 +42,16 @@ rules:
             maxlocalconns:  500
         runlist:
             - 'service apache2 restart'
-    
+    zombies:
+        description:    'Any process caught in zombie mode'
+        procid:         ''
+        triggers:
+            # This can be any process state (zombie, sleeping, running, etc)
+            state:      'zombie'
+        kill:           true
+        killwith:       9
     puppet:
-        description:    'kill -9 puppet agents that are zombified'
+        description:    'kill -9 puppet agents that are hanging'
         procid: 'puppet agent'
         # Find all processes created more than 1 day ago.
         triggers:
