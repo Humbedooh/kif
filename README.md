@@ -1,8 +1,8 @@
 # kif
-### KIF: Kill It (with) Fire - A simple monitoring program with a yaml configuration
+### KIF: Kill It (with) Fire - A simple find-and-fix program with a yaml configuration
 
-Kif is a simple monitoring program that detects programs running amok and tries to correct them.
-It can currently scan for:
+Kif is a simple monitoring program that detects programs running amok
+and tries to correct them. It can currently scan for:
 
 - Memory usage (MB, GB or % of total mem available)
 - No. of open file descriptors
@@ -11,7 +11,8 @@ It can currently scan for:
 - Age of process
 - State of process (running, waiting, zombie etc)
 
-and act accordingly, either running a custom command (such as restarting a service) or kill it with any preferred signal.
+and act accordingly, either running a custom command (such as restarting
+a service) or killing it with any preferred signal.
 
 See [kif.sample.yaml](kif.sample.yaml) for example configuration.
 
@@ -22,8 +23,8 @@ See [kif.sample.yaml](kif.sample.yaml) for example configuration.
 
 ### Installation and use:
 - Download Kif
-- Make a kif.yaml configuration (see the example)
-- Install the yaml and psutil module for python
+- Make a kif.yaml configuration (see the [example](kif.sample.yaml))
+- Install the yaml and psutil module for python (either via package manager or pip)
 - Run as root (required to both read usage and restart services).
 - Enjoy!
 
