@@ -182,19 +182,19 @@ def checkTriggers(id, alist, triggers):
             else:
                 maxage = int(value)
                 cage = alist['process_age']
-            lstr ="Process '%s' is %u seconds old, max allowed is %u" % (id, cage,maxage)
+            lstr ="      - Process '%s' is %u seconds old, max allowed is %u" % (id, cage,maxage)
             print(lstr)
             if cage > maxage:
-                print("Trigger fired!")
+                print("    - Trigger fired!")
                 return lstr
         
         # state: kill processes in a specific state (zombie etc)
         if trigger == 'state':
             cstate = alist['process_state']
-            lstr ="Process '%s' is in state '%s'" % (id, cstate)
+            lstr ="      - Process '%s' is in state '%s'" % (id, cstate)
             print(lstr)
             if cstate == value:
-                print("Trigger fired!")
+                print("    - Trigger fired!")
                 return lstr
     return None
 
@@ -400,7 +400,7 @@ def main():
     </pre><br/>
     As a precaution, the following commands were run to fix issues:<br/>
     <pre>
-    %s
+%s
     </pre><br/>
     With regards and sighs,<br/>
     Your loyal KIF service.
