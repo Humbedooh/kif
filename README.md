@@ -1,5 +1,5 @@
-# kif
-### KIF: Kill It (with) Fire - A simple find-and-fix program with a yaml configuration
+# KIF: Kill It (with) Fire
+## A simple find-and-fix program with a yaml configuration
 
 Kif is a simple monitoring program that detects programs running amok
 and tries to correct them. It can currently scan for:
@@ -18,7 +18,7 @@ you of issues found and actions taken, either via email or hipchat.
 See [kif.sample.yaml](kif.sample.yaml) for example configuration and
 features.
 
-## Requirements:
+### Requirements:
 - python 2.7+ (3.x will work)
 - python-yaml
 - python-psutil
