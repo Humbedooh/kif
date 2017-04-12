@@ -106,8 +106,10 @@ def getprocs():
 
 
 def checkTriggers(id, alist, triggers):
+    if len(triggers) > 0:
+        print("  - Checking triggers:")
     for trigger, value in triggers.items():
-        print("Checking against trigger %s" % trigger)
+        print("    - Checking against trigger %s" % trigger)
 
         # maxmemory: Process can max use N amount of memory or it triggers
         if trigger == 'maxmemory':
@@ -123,40 +125,40 @@ def checkTriggers(id, alist, triggers):
                 maxmem = int(value.replace('gb','')) * gb
                 cmem = alist['memory_bytes']
                 cvar = ' bytes'
-            lstr = "Process '%s' is using %u%s memory, max allowed is %u%s" % (id, cmem+0.5, cvar, maxmem+0.5, cvar)
+            lstr = "      - Process '%s' is using %u%s memory, max allowed is %u%s" % (id, cmem+0.5, cvar, maxmem+0.5, cvar)
             print(lstr)
             if cmem > maxmem:
-                print("Trigger fired!")
+                print("    - Trigger fired!")
                 return lstr
 
         # maxfds: maximum number of file descriptors
         if trigger == 'maxfds':
             maxfds = int(value)
             cfds = alist['fds']
-            lstr = "Process '%s' is using %u FDs, max allowed is %u" % (id, cfds, value)
+            lstr = "      - Process '%s' is using %u FDs, max allowed is %u" % (id, cfds, value)
             print(lstr)
             if cfds > maxfds:
-                print("Trigger fired!")
+                print("    - Trigger fired!")
                 return lstr
 
         # maxconns: maximum number of open connections
         if trigger == 'maxconns':
             maxconns = int(value)
             ccons = alist['connections']
-            lstr = "Process '%s' is using %u connections, max allowed is %u" % (id, ccons, value)
+            lstr = "      - Process '%s' is using %u connections, max allowed is %u" % (id, ccons, value)
             print(lstr)
             if ccons > maxconns:
-                print("Trigger fired!")
+                print("    - Trigger fired!")
                 return lstr
 
         # maxlocalconns: maximum number of open connections in local network
         if trigger == 'maxlocalconns':
             maxconns = int(value)
             ccons = alist['connections_local']
-            lstr ="Process '%s' is using %u LAN connections, max allowed is %u" % (id, ccons, value)
+            lstr ="      - Process '%s' is using %u LAN connections, max allowed is %u" % (id, ccons, value)
             print(lstr)
             if ccons > maxconns:
-                print("Trigger fired!")
+                print("    - Trigger fired!")
                 return lstr
             
         # maxage: maximum age of a process (NOT cpu time)
@@ -205,12 +207,12 @@ def scanForTriggers():
 
         # For each rule..
         for id, rule in config['rules'].items():
-            print("Running rule %s" % id)
+            print("- Running rule %s" % id)
             # Is this process running here?
             pids = []
             if 'procid' in rule:
                 procid = rule['procid']
-                print("Checking for process %s" % procid)
+                print("  - Checking for process %s" % procid)
                 for xpid, cmdline in procs.items():
                     addit = False
                     if isinstance(procid, str):
@@ -262,7 +264,7 @@ def scanForTriggers():
             analysis = {}
             for pid in pids:
                 proca = {}
-                print("Found process at PID %u" % pid)
+                print("  - Found process at PID %u" % pid)
 
                 # Get all relevant data from this PID
                 proca['memory_pct'] = getmempct(pid)
@@ -309,7 +311,7 @@ def scanForTriggers():
                                 killlist[pid] = sig
                         errs.append(err)
             else:
-                print("No matching processes found")
+                print("  - No matching processes found")
     return errs, runlist, killlist
 
 
