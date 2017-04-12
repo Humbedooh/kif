@@ -198,31 +198,32 @@ def scanForTriggers():
             pids = []
             if 'procid' in rule:
                 procid = rule['procid']
-    
                 print("Checking for process %s" % procid)
                 for xpid, cmdline in procs.iteritems():
+                    addit = False
                     if isinstance(procid, str):
                         if " ".join(cmdline).find(rule['procid']) != -1:
-                            pids.append(xpid)
+                            addit = True
                     elif isinstance(procid, list):
                         if cmdline == procid:
-                            addit = False
-                            if not ('ignore' in rule):
-                                addit = True
-                            elif isinstance(rule['ignore'], str) and " ".join(cmdline) != rule['ignore']:
-                                addit = True
-                            elif isinstance(rule['ignore'], list) and cmdline != rule['ignore']:
-                                addit = True
-                            if 'ignorepidfile' in rule:
-                                try:
-                                    ppid = int(open(rule['ignorepidfile']).read())
-                                    if ppid == xpid:
-                                        print("Ignoring %u, matches pid file %s!" % (ppid, rule['ignorepidfile']))
-                                        addit = False
-                                except Exception as err:
-                                    print(err)
-                            if addit:
-                                pids.append(xpid)
+                            addit = True
+                    if addit:
+                        if not ('ignore' in rule):
+                            addit = True
+                        elif isinstance(rule['ignore'], str) and " ".join(cmdline) != rule['ignore']:
+                            addit = True
+                        elif isinstance(rule['ignore'], list) and cmdline != rule['ignore']:
+                            addit = True
+                        if 'ignorepidfile' in rule:
+                            try:
+                                ppid = int(open(rule['ignorepidfile']).read())
+                                if ppid == xpid:
+                                    print("Ignoring %u, matches pid file %s!" % (ppid, rule['ignorepidfile']))
+                                    addit = False
+                            except Exception as err:
+                                print(err)
+                        if addit:
+                            pids.append(xpid)
             if 'uid' in rule:
                 for xpid, cmdline in procs.iteritems():
                     uid = getuser(xpid)
