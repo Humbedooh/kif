@@ -376,7 +376,7 @@ def main():
         if 'notifications' in config and 'email' in config['notifications']:
             ecfg = config['notifications']['email']
             if 'rcpt' in ecfg and 'from' in ecfg:
-                subject = "[KIF] %s: triggered %u events" % (me, len(runlist))
+                subject = "[KIF] %s: triggered %u events" % (me, len(runlist) + len(killlist))
                 msg = """Hullo there,
 
     KIF has detectect the following issues on %s:
