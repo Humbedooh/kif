@@ -106,7 +106,7 @@ def getprocs():
 
 
 def checkTriggers(id, alist, triggers):
-    for trigger, value in triggers.iteritems():
+    for trigger, value in triggers.items():
         print("Checking against trigger %s" % trigger)
 
         # maxmemory: Process can max use N amount of memory or it triggers
@@ -204,14 +204,14 @@ def scanForTriggers():
     if 'rules' in config:
 
         # For each rule..
-        for id, rule in config['rules'].iteritems():
+        for id, rule in config['rules'].items():
             print("Running rule %s" % id)
             # Is this process running here?
             pids = []
             if 'procid' in rule:
                 procid = rule['procid']
                 print("Checking for process %s" % procid)
-                for xpid, cmdline in procs.iteritems():
+                for xpid, cmdline in procs.items():
                     addit = False
                     if isinstance(procid, str):
                         if " ".join(cmdline).find(rule['procid']) != -1:
@@ -237,7 +237,7 @@ def scanForTriggers():
                         if addit:
                             pids.append(xpid)
             if 'uid' in rule:
-                for xpid, cmdline in procs.iteritems():
+                for xpid, cmdline in procs.items():
                     uid = getuser(xpid)
                     if uid == rule['uid']:
                         addit = False
@@ -275,7 +275,7 @@ def scanForTriggers():
 
                 # If combining, combine into the analysis hash
                 if 'combine' in rule and rule['combine'] == True:
-                    for k, v in proca.iteritems():
+                    for k, v in proca.items():
                         if not k in analysis and ( isinstance(v, int) or isinstance(v, float) ):
                             analysis[k] = 0
                         if ( isinstance(v, int) or isinstance(v, float) ):
@@ -359,7 +359,7 @@ def main():
                 msgrl += "(failed!: <kbd>%s</kbd>)" % e.output
                 bads += 1
             msgrl += "\n"
-        for pid, sig in killlist.iteritems():
+        for pid, sig in killlist.items():
             print("- KILL PID %u with sig %u" % (pid, sig))
             msgrl += "- KILL PID %u with sig %u" % (pid, sig)
             if not args.debug:

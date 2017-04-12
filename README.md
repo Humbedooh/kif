@@ -16,7 +16,7 @@ and act accordingly, either running a custom command (such as restarting a servi
 See [kif.sample.yaml](kif.sample.yaml) for example configuration.
 
 ## Requirements:
-- python2.7
+- python 2.7+ (3.x will work)
 - python-yaml
 - python-psutil
 
