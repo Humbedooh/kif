@@ -38,13 +38,13 @@ def notifyEmail(fro, to, subject, msg):
     s = smtplib.SMTP('localhost')
     s.sendmail(fro, to, msg.as_string())
 
-def notifyHipchat(room, token, msg):
+def notifyHipchat(room, token, msg, notify = False):
     payload = {
             'room_id': room,
             'auth_token': token,
             'from': "Kif",
             'message_format': 'html',
-            'notify': '0',
+            'notify': '1' if notify else '0',
             'color':'yellow',
             'message': msg
         }
@@ -319,6 +319,7 @@ def scanForTriggers():
 parser = argparse.ArgumentParser()
 parser.add_argument("-d", "--debug", help="Debug run (don't execute runlists)", action = 'store_true')
 parser.add_argument("-D", "--daemonize", help="Daemonize Kif", action = 'store_true')
+parser.add_argument("-F", "--foreground", help="Run Kif continuous in foreground mode", action = 'store_true')
 parser.add_argument("-s", "--stop", help="Stop the Kif daemon", action = 'store_true')
 parser.add_argument("-r", "--restart", help="Restart the Kif daemon", action = 'store_true')
 parser.add_argument("-c", "--config", help="Path to the config file if not in ./kif.yaml")
@@ -405,7 +406,7 @@ def main():
     With regards and sighs,<br/>
     Your loyal KIF service.
                 """ % (me, msgerr, msgrl)
-                notifyHipchat(hcfg['room'], hcfg['token'], msg)
+                notifyHipchat(hcfg['room'], hcfg['token'], msg, hcfg['notify'] if 'notify' in hcfg else False)
 
     print("KIF run finished!")
 
@@ -575,5 +576,12 @@ else:
         print("Daemonizing Kif, using %s..." % pidfile)
         daemon = MyDaemon(pidfile)
         daemon.start(args)
+    elif args.foreground:
+        interval = 300
+        if 'daemon' in config and 'interval' in config['daemon']:
+            interval = int(config['daemon']['interval'])
+        while True:
+            main()
+            time.sleep(interval)
     else:
         main()
