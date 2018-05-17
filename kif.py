@@ -105,7 +105,10 @@ def getprocs():
 
 
 
-def checkTriggers(id, alist, triggers):
+def checkTriggers(id, alist, triggers, dead = False):
+    if not alist:
+        print("  - No analytical data found, bailing on check!")
+        return None
     if len(triggers) > 0:
         print("  - Checking triggers:")
     for trigger, value in triggers.items():
@@ -200,9 +203,7 @@ def checkTriggers(id, alist, triggers):
 
 def scanForTriggers():
     procs = getprocs() # get all current processes
-    runlist = set()
-    killlist = {}
-    errs = []
+    actions = []
     if 'rules' in config:
 
         # For each rule..
@@ -266,53 +267,74 @@ def scanForTriggers():
                 proca = {}
                 print("  - Found process at PID %u" % pid)
 
-                # Get all relevant data from this PID
-                proca['memory_pct'] = getmempct(pid)
-                proca['memory_bytes'] = getmem(pid)
-                proca['fds'] = getfds(pid)
-                proca['connections'] = getcons(pid)
-                proca['connections_local'] = getcons(pid, True)
-                proca['process_age'] = time.time() - getage(pid)
-                proca['process_state'] = getstate(pid)
-
-                # If combining, combine into the analysis hash
-                if 'combine' in rule and rule['combine'] == True:
-                    for k, v in proca.items():
-                        if not k in analysis and ( isinstance(v, int) or isinstance(v, float) ):
-                            analysis[k] = 0
-                        if ( isinstance(v, int) or isinstance(v, float) ):
-                            analysis[k] += v
-                        else:
-                            analysis[k] = ''
-                else:
-                    # If running a per-pid test, run it:
-                    err = checkTriggers(id, proca, rule['triggers'])
-                    if err:
-                        if 'runlist' in rule and len(rule['runlist']) > 0:
-                            runlist.update(set(rule['runlist']))
-                        if 'kill' in rule and rule['kill'] == True:
-                            sig = 9
-                            if 'killwith' in rule:
-                                sig = int(rule['killwith'])
-                            killlist[pid] = sig
-                        errs.append(err)
+                try:
+                    # Get all relevant data from this PID
+                    proca['memory_pct'] = getmempct(pid)
+                    proca['memory_bytes'] = getmem(pid)
+                    proca['fds'] = getfds(pid)
+                    proca['connections'] = getcons(pid)
+                    proca['connections_local'] = getcons(pid, True)
+                    proca['process_age'] = time.time() - getage(pid)
+                    proca['process_state'] = getstate(pid)
+    
+                    # If combining, combine into the analysis hash
+                    if 'combine' in rule and rule['combine'] == True:
+                        for k, v in proca.items():
+                            if not k in analysis and ( isinstance(v, int) or isinstance(v, float) ):
+                                analysis[k] = 0
+                            if ( isinstance(v, int) or isinstance(v, float) ):
+                                analysis[k] += v
+                            else:
+                                analysis[k] = ''
+                    else:
+                        # If running a per-pid test, run it:
+                        err = checkTriggers(id, proca, rule['triggers'])
+                        if err:
+                            action = {
+                                'pids': [],
+                                'trigger': "",
+                                'runlist': [],
+                                'notify': rule.get('notify', None),
+                                'kills': {}
+                            }
+                            if 'runlist' in rule and len(rule['runlist']) > 0:
+                                action['runlist'] = rule['runlist']
+                            if 'kill' in rule and rule['kill'] == True:
+                                sig = 9
+                                if 'killwith' in rule:
+                                    sig = int(rule['killwith'])
+                                action['kills'][pid] = sig
+                            action['trigger'] = err
+                            actions.append(action)
+                except:
+                    print("Could not analyze proc %u, bailing!" % pid)
+                    continue
             if len(pids) > 0:
                 # If combined trigger test, run it now
                 if 'combine' in rule and rule['combine'] == True:
                     err = checkTriggers(id, analysis, rule['triggers'])
                     if err:
+                        action = {
+                            'pids': [],
+                            'trigger': "",
+                            'runlist': [],
+                            'notify': rule.get('notify', None),
+                            'kills': {}
+                        }
                         if 'runlist' in rule and len(rule['runlist']) > 0:
-                            runlist.update(set(rule['runlist']))
+                            action['runlist'] = rule['runlist']
                         if 'kill' in rule and rule['kill'] == True:
                             sig = 9
                             if 'killwith' in rule:
                                 sig = int(rule['killwith'])
                             for ypid in pids:
-                                killlist[pid] = sig
-                        errs.append(err)
+                                action['kills'][ypid] = sig
+                        action['trigger'] = err
+                        actions.append(action)
             else:
                 print("  - No matching processes found")
-    return errs, runlist, killlist
+                
+    return actions
 
 
 # Get args, if any
@@ -333,80 +355,78 @@ else:
 def main():
     global config
     # Now actually run things
-    err, runlist, killlist = scanForTriggers()
-    if len(runlist) > 0 or len(killlist) > 0:
+    actions = scanForTriggers()
+    if len(actions) > 0:
         goods = 0
         bads = 0
+        
+        for action in actions:
 
-        msgerr = ""
-        msgrl = ""
-        if len(err) > 0:
             print("Following triggers were detected:")
-            for item in err:
+            print("- %s" % action['trigger'])
+            print("Running triggered commands:")
+            rloutput = ""
+            for item in action['runlist']:
                 print("- %s" % item)
-                msgerr += "- %s\n" % item
-        print("Running triggered commands:")
-        for item in runlist:
-            print("- %s" % item)
-            msgrl += "- %s" % item
-            try:
+                rloutput += "- %s" % item
+                try:
+                    if not args.debug:
+                        subprocess.check_output(item, shell = True, stderr=subprocess.STDOUT)
+                        rloutput += " (success)"
+                    else:
+                        print("(disabled due to --debug flag)")
+                        rloutput += " (disabled due to --debug)"
+                    goods += 1
+                except subprocess.CalledProcessError as e:
+                    print("command failed: %s" % e.output)
+                    rloutput += " (failed!: %s)" % e.output
+                    bads += 1
+                rloutput += "\n"
+            for pid, sig in action['kills'].items():
+                print("- KILL PID %u with sig %u" % (pid, sig))
+                rloutput += "- KILL PID %u with sig %u" % (pid, sig)
                 if not args.debug:
-                    subprocess.check_output(item, shell = True, stderr=subprocess.STDOUT)
-                    msgrl += "(<kbd>success</kbd>)"
+                    os.kill(pid, sig)
                 else:
-                    print("(disabled due to --debug flag)")
-                    msgrl += "(disabled due to --debug)"
+                    print(" (disabled due to --debug flag)")
+                    rloutput += " (disabled due to --debug flag)"
+                rloutput += "\n"
                 goods += 1
-            except subprocess.CalledProcessError as e:
-                print("command failed: %s" % e.output)
-                msgrl += "(failed!: <kbd>%s</kbd>)" % e.output
-                bads += 1
-            msgrl += "\n"
-        for pid, sig in killlist.items():
-            print("- KILL PID %u with sig %u" % (pid, sig))
-            msgrl += "- KILL PID %u with sig %u" % (pid, sig)
-            if not args.debug:
-                os.kill(pid, sig)
-            else:
-                print(" (disabled due to --debug flag)")
-                msgrl += " (disabled due to --debug flag)"
-            msgrl += "\n"
-            goods += 1
-        print("%u calls succeeded, %u failed." % (goods, bads))
+            print("%u calls succeeded, %u failed." % (goods, bads))
+    
+            if 'notifications' in config and 'email' in config['notifications'] and ('email' in (action['notify'] or "email")):
+                ecfg = config['notifications']['email']
+                if 'rcpt' in ecfg and 'from' in ecfg:
+                    subject = "[KIF] %s: triggered %u events" % (me, len(action['runlist']) + len(action['kills'].items()))
+                    msg = """Hullo there,
 
-        if 'notifications' in config and 'email' in config['notifications']:
-            ecfg = config['notifications']['email']
-            if 'rcpt' in ecfg and 'from' in ecfg:
-                subject = "[KIF] %s: triggered %u events" % (me, len(runlist) + len(killlist))
-                msg = """Hullo there,
+KIF has detectect the following issues on %s:
 
-    KIF has detectect the following issues on %s:
-
-    %s
-
-    As a precaution, the following commands were run to fix issues:
-
-    %s
-
-    With regards and sighs,
-    Your loyal KIF service.
-                """ % (me, msgerr, msgrl)
-                notifyEmail(ecfg['from'], ecfg['rcpt'], subject, msg)
-        if 'notifications' in config and 'hipchat' in config['notifications']:
-            hcfg = config['notifications']['hipchat']
-            if 'token' in hcfg and 'room' in hcfg:
-                msg = """KIF has detectect the following issues on %s:<br/>
-    <pre>
-    %s
-    </pre><br/>
-    As a precaution, the following commands were run to fix issues:<br/>
-    <pre>
 %s
-    </pre><br/>
-    With regards and sighs,<br/>
-    Your loyal KIF service.
-                """ % (me, msgerr, msgrl)
-                notifyHipchat(hcfg['room'], hcfg['token'], msg, hcfg['notify'] if 'notify' in hcfg else False)
+
+As a precaution, the following commands were run to fix issues:
+
+%s
+
+With regards and sighs,
+Your loyal KIF service.
+                    """ % (me, action['trigger'], rloutput)
+                    notifyEmail(ecfg['from'], ecfg['rcpt'], subject, msg)
+            if 'notifications' in config and 'hipchat' in config['notifications'] and ('hipchat' in (action['notify'] or "hipchat")):
+                hcfg = config['notifications']['hipchat']
+                if 'token' in hcfg and 'room' in hcfg:
+                    msg = """KIF has detectect the following issues on %s:<br/>
+<pre>
+%s
+</pre><br/>
+As a precaution, the following commands were run to fix issues:<br/>
+<pre>
+%s
+</pre><br/>
+With regards and sighs,<br/>
+Your loyal KIF service.
+                    """ % (me, action['trigger'], rloutput)
+                    notifyHipchat(hcfg['room'], hcfg['token'], msg, hcfg['notify'] if 'notify' in hcfg else False)
 
     print("KIF run finished!")
 
