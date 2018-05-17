@@ -42,6 +42,8 @@ rules:
             maxlocalconns:  500
         runlist:
             - 'service apache2 restart'
+        # Only notify via email, no hipchat!
+        notify: email
     zombies:
         description:    'Any process caught in zombie mode'
         procid:         ''
@@ -61,6 +63,8 @@ rules:
         # Kill it with signal 9
         kill:           true
         killwith:       9
+        # Don't notify, just do the things
+        notify: none
         
 # Notification options
 notifications:
