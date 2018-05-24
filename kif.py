@@ -51,43 +51,30 @@ def notifyHipchat(room, token, msg, notify = False):
     requests.post('https://api.hipchat.com/v1/rooms/message', data = payload)
 
 
-def getmem(pid):
-    proc = psutil.Process(pid)
-    mem = proc.memory_info().rss
-    return mem
+class ProcessInfo(object):
+    def __init__(self, pid):
+        proc = psutil.Process(pid)
+        self.mem = proc.memory_info().rss
+        self.mempct = proc.memory_percent()
+        self.fds = proc.num_fds()
+        self.age = time.time() - proc.create_time()
+        self.state = proc.status()
 
-def getmempct(pid):
-    proc = psutil.Process(pid)
-    mem = proc.memory_percent()
-    return mem
+        self.conns = len(proc.connections())
+        self.conns_local = 0
+        for connection in proc.connections():
+            if connection.raddr and connection.raddr[0]:
+                if RE_LOCAL_IP.match(connection.raddr[0]) \
+                   or connection.raddr[0] == '::1':
+                    self.conns_local += 1
 
-def getfds(pid):
-    proc = psutil.Process(pid)
-    return proc.num_fds()
+RE_LOCAL_IP = re.compile(r'^(10|192|127)\.')
+
 
 def getuser(pid):
     proc = psutil.Process(pid)
     return proc.username()
 
-def getage(pid):
-    proc = psutil.Process(pid)
-    return proc.create_time()
-
-def getstate(pid):
-    proc = psutil.Process(pid)
-    return proc.status()
-
-def getcons(pid, lan = False):
-    proc = psutil.Process(pid)
-    if not lan:
-        return len(proc.connections())
-    else:
-        lancons = 0
-        for connection in proc.connections():
-            if len(connection.raddr) > 0 and connection.raddr[0]:
-                if re.match(r"^(10|192|127)\.", connection.raddr[0]) or connection.raddr[0] == '::1':
-                    lancons += 1
-        return lancons
 
 # getprocs: Get all processes and their command line stack
 def getprocs():
@@ -269,13 +256,14 @@ def scanForTriggers(config):
 
                 try:
                     # Get all relevant data from this PID
-                    proca['memory_pct'] = getmempct(pid)
-                    proca['memory_bytes'] = getmem(pid)
-                    proca['fds'] = getfds(pid)
-                    proca['connections'] = getcons(pid)
-                    proca['connections_local'] = getcons(pid, True)
-                    proca['process_age'] = time.time() - getage(pid)
-                    proca['process_state'] = getstate(pid)
+                    info = ProcessInfo(pid)
+                    proca['memory_pct'] = info.mempct
+                    proca['memory_bytes'] = info.mem
+                    proca['fds'] = info.fds
+                    proca['connections'] = info.conns
+                    proca['connections_local'] = info.conns_local
+                    proca['process_age'] = info.age
+                    proca['process_state'] = info.state
     
                     # If combining, combine into the analysis hash
                     if 'combine' in rule and rule['combine'] == True:
