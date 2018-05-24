@@ -397,7 +397,19 @@ def main(config):
                 ecfg = config['notifications']['email']
                 if 'rcpt' in ecfg and 'from' in ecfg:
                     subject = "[KIF] %s: triggered %u events" % (ME, len(action['runlist']) + len(action['kills'].items()))
-                    msg = """Hullo there,
+                    msg = TEMPLATE_EMAIL % (ME, action['trigger'], rloutput)
+                    notifyEmail(ecfg['from'], ecfg['rcpt'], subject, msg)
+
+            if 'notifications' in config and 'hipchat' in config['notifications'] and ('hipchat' in (action['notify'] or "hipchat")):
+                hcfg = config['notifications']['hipchat']
+                if 'token' in hcfg and 'room' in hcfg:
+                    msg = TEMPLATE_HIPCHAT % (ME, action['trigger'], rloutput)
+                    notifyHipchat(hcfg['room'], hcfg['token'], msg, hcfg['notify'] if 'notify' in hcfg else False)
+
+    print("KIF run finished!")
+
+
+TEMPLATE_EMAIL = """Hullo there,
 
 KIF has detectect the following issues on %s:
 
@@ -409,12 +421,9 @@ As a precaution, the following commands were run to fix issues:
 
 With regards and sighs,
 Your loyal KIF service.
-                    """ % (ME, action['trigger'], rloutput)
-                    notifyEmail(ecfg['from'], ecfg['rcpt'], subject, msg)
-            if 'notifications' in config and 'hipchat' in config['notifications'] and ('hipchat' in (action['notify'] or "hipchat")):
-                hcfg = config['notifications']['hipchat']
-                if 'token' in hcfg and 'room' in hcfg:
-                    msg = """KIF has detectect the following issues on %s:<br/>
+"""
+
+TEMPLATE_HIPCHAT ="""KIF has detectect the following issues on %s:<br/>
 <pre>
 %s
 </pre><br/>
@@ -424,10 +433,8 @@ As a precaution, the following commands were run to fix issues:<br/>
 </pre><br/>
 With regards and sighs,<br/>
 Your loyal KIF service.
-                    """ % (ME, action['trigger'], rloutput)
-                    notifyHipchat(hcfg['room'], hcfg['token'], msg, hcfg['notify'] if 'notify' in hcfg else False)
+"""
 
-    print("KIF run finished!")
 
 class Daemonize:
     """A generic daemon class.
