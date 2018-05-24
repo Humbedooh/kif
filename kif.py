@@ -203,6 +203,8 @@ def checkTriggers(id, alist, triggers, dead = False):
 def scanForTriggers(config):
     procs = getprocs() # get all current processes
     actions = []
+
+    ### TODO: reindent
     if True:
 
         # For each rule..
@@ -365,6 +367,8 @@ def main(config):
 
 
 def run_actions(config, actions):
+        ### TODO: reindent
+
         goods = 0
         bads = 0
         
