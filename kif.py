@@ -21,13 +21,13 @@ import atexit
 import signal
 
 # define a megabyte and gigabyte
-mb = (2 ** 20)
-gb = (2 ** 30)
+MB = (2 ** 20)
+GB = (2 ** 30)
 
 # hostname, pid file etc
-me = socket.gethostname()
-pidfile = "/var/run/kif.pid"
-config = None
+ME = socket.gethostname()
+PIDFILE = "/var/run/kif.pid"
+CONFIG = None
 
 # Miscellaneous auxiliary functions
 def notifyEmail(fro, to, subject, msg):
@@ -121,11 +121,11 @@ def checkTriggers(id, alist, triggers, dead = False):
                 cmem = alist['memory_pct']
                 cvar = '%'
             elif value.find('mb') != -1:    # mb check
-                maxmem = int(value.replace('mb','')) * mb
+                maxmem = int(value.replace('mb','')) * MB
                 cmem = alist['memory_bytes']
                 cvar = ' bytes'
             elif value.find('gb') != -1:    # gb check
-                maxmem = int(value.replace('gb','')) * gb
+                maxmem = int(value.replace('gb','')) * GB
                 cmem = alist['memory_bytes']
                 cvar = ' bytes'
             lstr = "      - Process '%s' is using %u%s memory, max allowed is %u%s" % (id, cmem+0.5, cvar, maxmem+0.5, cvar)
@@ -201,7 +201,7 @@ def checkTriggers(id, alist, triggers, dead = False):
                 return lstr
     return None
 
-def scanForTriggers():
+def scanForTriggers(config):
     procs = getprocs() # get all current processes
     actions = []
     if 'rules' in config:
@@ -348,14 +348,13 @@ parser.add_argument("-c", "--config", help="Path to the config file if not in ./
 args = parser.parse_args()
 
 if not args.config:
-    config = yaml.load(open("kif.yaml"))
+    CONFIG = yaml.load(open("kif.yaml"))
 else:
-    config = yaml.load(open(args.config))
+    CONFIG = yaml.load(open(args.config))
 
-def main():
-    global config
+def main(config):
     # Now actually run things
-    actions = scanForTriggers()
+    actions = scanForTriggers(config)
     if len(actions) > 0:
         goods = 0
         bads = 0
@@ -397,7 +396,7 @@ def main():
             if 'notifications' in config and 'email' in config['notifications'] and ('email' in (action['notify'] or "email")):
                 ecfg = config['notifications']['email']
                 if 'rcpt' in ecfg and 'from' in ecfg:
-                    subject = "[KIF] %s: triggered %u events" % (me, len(action['runlist']) + len(action['kills'].items()))
+                    subject = "[KIF] %s: triggered %u events" % (ME, len(action['runlist']) + len(action['kills'].items()))
                     msg = """Hullo there,
 
 KIF has detectect the following issues on %s:
@@ -410,7 +409,7 @@ As a precaution, the following commands were run to fix issues:
 
 With regards and sighs,
 Your loyal KIF service.
-                    """ % (me, action['trigger'], rloutput)
+                    """ % (ME, action['trigger'], rloutput)
                     notifyEmail(ecfg['from'], ecfg['rcpt'], subject, msg)
             if 'notifications' in config and 'hipchat' in config['notifications'] and ('hipchat' in (action['notify'] or "hipchat")):
                 hcfg = config['notifications']['hipchat']
@@ -425,7 +424,7 @@ As a precaution, the following commands were run to fix issues:<br/>
 </pre><br/>
 With regards and sighs,<br/>
 Your loyal KIF service.
-                    """ % (me, action['trigger'], rloutput)
+                    """ % (ME, action['trigger'], rloutput)
                     notifyHipchat(hcfg['room'], hcfg['token'], msg, hcfg['notify'] if 'notify' in hcfg else False)
 
     print("KIF run finished!")
@@ -567,8 +566,8 @@ def print(*pargs, **pkwargs):
     else:
         __builtin__.print(*pargs)
 
-if 'logging' in config and 'logfile' in config['logging']:
-    logging.basicConfig(filename=config['logging']['logfile'], format='[%(asctime)s]: %(message)s', level=logging.INFO)
+if 'logging' in CONFIG and 'logfile' in CONFIG['logging']:
+    logging.basicConfig(filename=CONFIG['logging']['logfile'], format='[%(asctime)s]: %(message)s', level=logging.INFO)
 
 
 ## Daemon class
@@ -576,32 +575,32 @@ class MyDaemon(Daemonize):
     def run(self, args):
 
         interval = 300
-        if 'daemon' in config and 'interval' in config['daemon']:
-            interval = int(config['daemon']['interval'])
+        if 'daemon' in CONFIG and 'interval' in CONFIG['daemon']:
+            interval = int(CONFIG['daemon']['interval'])
         while True:
-            main()
+            main(CONFIG)
             time.sleep(interval)
 
 # Get started!
 if args.stop:
     print("Stopping Kif")
-    daemon = MyDaemon(pidfile)
+    daemon = MyDaemon(PIDFILE)
     daemon.stop()
 elif args.restart:
     print("Restarting Kif")
-    daemon = MyDaemon(pidfile)
+    daemon = MyDaemon(PIDFILE)
     daemon.restart()
 else:
     if args.daemonize:
-        print("Daemonizing Kif, using %s..." % pidfile)
-        daemon = MyDaemon(pidfile)
+        print("Daemonizing Kif, using %s..." % PIDFILE)
+        daemon = MyDaemon(PIDFILE)
         daemon.start(args)
     elif args.foreground:
         interval = 300
-        if 'daemon' in config and 'interval' in config['daemon']:
-            interval = int(config['daemon']['interval'])
+        if 'daemon' in CONFIG and 'interval' in CONFIG['daemon']:
+            interval = int(CONFIG['daemon']['interval'])
         while True:
-            main()
+            main(CONFIG)
             time.sleep(interval)
     else:
-        main()
+        main(CONFIG)
