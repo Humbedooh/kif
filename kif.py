@@ -411,7 +411,7 @@ def main(config):
 
 TEMPLATE_EMAIL = """Hullo there,
 
-KIF has detectect the following issues on %s:
+KIF has detected the following issues on %s:
 
 %s
 
@@ -423,7 +423,7 @@ With regards and sighs,
 Your loyal KIF service.
 """
 
-TEMPLATE_HIPCHAT ="""KIF has detectect the following issues on %s:<br/>
+TEMPLATE_HIPCHAT ="""KIF has detected the following issues on %s:<br/>
 <pre>
 %s
 </pre><br/>
