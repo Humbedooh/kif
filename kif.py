@@ -29,6 +29,10 @@ ME = socket.gethostname()
 PIDFILE = "/var/run/kif.pid"
 CONFIG = None
 
+# Default to checking triggers every N seconds.
+DEFAULT_INTERVAL = 300
+
+
 # Miscellaneous auxiliary functions
 def notifyEmail(fro, to, subject, msg):
     msg = email.mime.text.MIMEText(msg, _charset = "utf-8")
@@ -591,10 +595,8 @@ if 'logging' in CONFIG and 'logfile' in CONFIG['logging']:
 ## Daemon class
 class MyDaemon(Daemonize):
     def run(self, args):
-
-        interval = 300
-        if 'daemon' in CONFIG and 'interval' in CONFIG['daemon']:
-            interval = int(CONFIG['daemon']['interval'])
+        interval = int(CONFIG.get('daemon', { })
+                       .get('interval', DEFAULT_INTERVAL))
         while True:
             main(CONFIG)
             time.sleep(interval)
@@ -614,9 +616,8 @@ else:
         daemon = MyDaemon(PIDFILE)
         daemon.start(args)
     elif args.foreground:
-        interval = 300
-        if 'daemon' in CONFIG and 'interval' in CONFIG['daemon']:
-            interval = int(CONFIG['daemon']['interval'])
+        interval = int(CONFIG.get('daemon', { })
+                       .get('interval', DEFAULT_INTERVAL))
         while True:
             main(CONFIG)
             time.sleep(interval)
