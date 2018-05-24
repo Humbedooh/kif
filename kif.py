@@ -203,7 +203,7 @@ def checkTriggers(id, alist, triggers, dead = False):
 def scanForTriggers(config):
     procs = getprocs() # get all current processes
     actions = []
-    if 'rules' in config:
+    if True:
 
         # For each rule..
         for id, rule in config['rules'].items():
@@ -353,9 +353,18 @@ else:
     CONFIG = yaml.load(open(args.config))
 
 def main(config):
-    # Now actually run things
-    actions = scanForTriggers(config)
-    if len(actions) > 0:
+    if 'rules' not in config:
+        print('- NO RULES TO CHECK')
+    else:
+        # Now actually run things
+        actions = scanForTriggers(config)
+        if actions:
+            run_actions(config, actions)
+
+    print('KIF run finished!')
+
+
+def run_actions(config, actions):
         goods = 0
         bads = 0
         
@@ -405,8 +414,6 @@ def main(config):
                 if 'token' in hcfg and 'room' in hcfg:
                     msg = TEMPLATE_HIPCHAT % (ME, action['trigger'], rloutput)
                     notifyHipchat(hcfg['room'], hcfg['token'], msg, hcfg['notify'] if 'notify' in hcfg else False)
-
-    print("KIF run finished!")
 
 
 TEMPLATE_EMAIL = """Hullo there,
