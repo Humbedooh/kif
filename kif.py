@@ -52,7 +52,19 @@ def notifyHipchat(room, token, msg, notify = False):
 
 
 class ProcessInfo(object):
-    def __init__(self, pid):
+    def __init__(self, pid=None):
+        if pid is None:
+            # This instance will aggregate values across multiple processes,
+            # so we'll zero the numerics.
+            self.mem = 0
+            self.mempct = 0
+            self.fds = 0
+            self.age = 0
+            self.state = ''  # can't aggregate state, but needs a value
+            self.conns = 0
+            self.conns_local = 0
+            return
+
         proc = psutil.Process(pid)
         self.mem = proc.memory_info().rss
         self.mempct = proc.memory_percent()
