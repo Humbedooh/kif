@@ -84,6 +84,15 @@ class ProcessInfo(object):
                    or connection.raddr[0] == '::1':
                     self.conns_local += 1
 
+    def accumulate(self, other):
+        self.mem += other.mem
+        self.mempct += other.mempct  ### this is likely wrong
+        self.fds += other.fds
+        self.conns += other.conns
+        self.conns_local += other.conns_local
+        self.age += other.age
+        # cannot accumulate .state
+
 RE_LOCAL_IP = re.compile(r'^(10|192|127)\.')
 
 
@@ -108,10 +117,7 @@ def getprocs():
 
 
 
-def checkTriggers(id, alist, triggers, dead = False):
-    if not alist:
-        print("  - No analytical data found, bailing on check!")
-        return None
+def checkTriggers(id, info, triggers, dead = False):
     if len(triggers) > 0:
         print("  - Checking triggers:")
     for trigger, value in triggers.items():
@@ -121,15 +127,15 @@ def checkTriggers(id, alist, triggers, dead = False):
         if trigger == 'maxmemory':
             if value.find("%") != -1: # percentage check
                 maxmem = float(value.replace('%',''))
-                cmem = alist['memory_pct']
+                cmem = info.mempct
                 cvar = '%'
             elif value.find('mb') != -1:    # mb check
                 maxmem = int(value.replace('mb','')) * MB
-                cmem = alist['memory_bytes']
+                cmem = info.mem
                 cvar = ' bytes'
             elif value.find('gb') != -1:    # gb check
                 maxmem = int(value.replace('gb','')) * GB
-                cmem = alist['memory_bytes']
+                cmem = info.mem
                 cvar = ' bytes'
             lstr = "      - Process '%s' is using %u%s memory, max allowed is %u%s" % (id, cmem+0.5, cvar, maxmem+0.5, cvar)
             print(lstr)
@@ -140,7 +146,7 @@ def checkTriggers(id, alist, triggers, dead = False):
         # maxfds: maximum number of file descriptors
         if trigger == 'maxfds':
             maxfds = int(value)
-            cfds = alist['fds']
+            cfds = info.fds
             lstr = "      - Process '%s' is using %u FDs, max allowed is %u" % (id, cfds, value)
             print(lstr)
             if cfds > maxfds:
@@ -150,7 +156,7 @@ def checkTriggers(id, alist, triggers, dead = False):
         # maxconns: maximum number of open connections
         if trigger == 'maxconns':
             maxconns = int(value)
-            ccons = alist['connections']
+            ccons = info.conns
             lstr = "      - Process '%s' is using %u connections, max allowed is %u" % (id, ccons, value)
             print(lstr)
             if ccons > maxconns:
@@ -160,7 +166,7 @@ def checkTriggers(id, alist, triggers, dead = False):
         # maxlocalconns: maximum number of open connections in local network
         if trigger == 'maxlocalconns':
             maxconns = int(value)
-            ccons = alist['connections_local']
+            ccons = info.conns_local
             lstr ="      - Process '%s' is using %u LAN connections, max allowed is %u" % (id, ccons, value)
             print(lstr)
             if ccons > maxconns:
@@ -171,23 +177,23 @@ def checkTriggers(id, alist, triggers, dead = False):
         if trigger == 'maxage':
             if value.find('s') != -1:    # seconds
                 maxage = int(value.replace('s',''))
-                cage = alist['process_age']
+                cage = info.age
                 cvar = ' seconds'
             elif value.find('m') != -1:    # minutes
                 maxage = int(value.replace('m','')) * 60
-                cage = alist['process_age']
+                cage = info.age
                 cvar = ' minutes'
             elif value.find('h') != -1:    # hours
                 maxage = int(value.replace('h','')) * 360
-                cage = alist['process_age']
+                cage = info.age
                 cvar = ' hours'
             elif value.find('d') != -1:    # days
                 maxage = int(value.replace('d','')) * 86400
-                cage = alist['process_age']
+                cage = info.age
                 cvar = ' days'
             else:
                 maxage = int(value)
-                cage = alist['process_age']
+                cage = info.age
             lstr ="      - Process '%s' is %u seconds old, max allowed is %u" % (id, cage,maxage)
             print(lstr)
             if cage > maxage:
@@ -196,7 +202,7 @@ def checkTriggers(id, alist, triggers, dead = False):
         
         # state: kill processes in a specific state (zombie etc)
         if trigger == 'state':
-            cstate = alist['process_state']
+            cstate = info.state
             lstr ="      - Process '%s' is in state '%s'" % (id, cstate)
             print(lstr)
             if cstate == value:
@@ -267,34 +273,20 @@ def scanForTriggers(config):
                             pids.append(xpid)
 
             # If proc is running, analyze it
-            analysis = {}
+            analysis = ProcessInfo()  # no pid. accumulator.
             for pid in pids:
-                proca = {}
                 print("  - Found process at PID %u" % pid)
 
                 try:
                     # Get all relevant data from this PID
                     info = ProcessInfo(pid)
-                    proca['memory_pct'] = info.mempct
-                    proca['memory_bytes'] = info.mem
-                    proca['fds'] = info.fds
-                    proca['connections'] = info.conns
-                    proca['connections_local'] = info.conns_local
-                    proca['process_age'] = info.age
-                    proca['process_state'] = info.state
     
                     # If combining, combine into the analysis hash
                     if 'combine' in rule and rule['combine'] == True:
-                        for k, v in proca.items():
-                            if not k in analysis and ( isinstance(v, int) or isinstance(v, float) ):
-                                analysis[k] = 0
-                            if ( isinstance(v, int) or isinstance(v, float) ):
-                                analysis[k] += v
-                            else:
-                                analysis[k] = ''
+                        analysis.accumulate(info)
                     else:
                         # If running a per-pid test, run it:
-                        err = checkTriggers(id, proca, rule['triggers'])
+                        err = checkTriggers(id, info, rule['triggers'])
                         if err:
                             action = {
                                 'pids': [],
