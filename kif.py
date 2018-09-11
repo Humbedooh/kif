@@ -21,13 +21,17 @@ import atexit
 import signal
 
 # define a megabyte and gigabyte
-mb = (2 ** 20)
-gb = (2 ** 30)
+MB = (2 ** 20)
+GB = (2 ** 30)
 
 # hostname, pid file etc
-me = socket.gethostname()
-pidfile = "/var/run/kif.pid"
-config = None
+ME = socket.gethostname()
+PIDFILE = "/var/run/kif.pid"
+CONFIG = None
+
+# Default to checking triggers every N seconds.
+DEFAULT_INTERVAL = 300
+
 
 # Miscellaneous auxiliary functions
 def notifyEmail(fro, to, subject, msg):
@@ -51,43 +55,51 @@ def notifyHipchat(room, token, msg, notify = False):
     requests.post('https://api.hipchat.com/v1/rooms/message', data = payload)
 
 
-def getmem(pid):
-    proc = psutil.Process(pid)
-    mem = proc.memory_info().rss
-    return mem
+class ProcessInfo(object):
+    def __init__(self, pid=None):
+        if pid is None:
+            # This instance will aggregate values across multiple processes,
+            # so we'll zero the numerics.
+            self.mem = 0
+            self.mempct = 0
+            self.fds = 0
+            self.age = 0
+            self.state = ''  # can't aggregate state, but needs a value
+            self.conns = 0
+            self.conns_local = 0
+            return
 
-def getmempct(pid):
-    proc = psutil.Process(pid)
-    mem = proc.memory_percent()
-    return mem
+        proc = psutil.Process(pid)
+        self.mem = proc.memory_info().rss
+        self.mempct = proc.memory_percent()
+        self.fds = proc.num_fds()
+        self.age = time.time() - proc.create_time()
+        self.state = proc.status()
 
-def getfds(pid):
-    proc = psutil.Process(pid)
-    return proc.num_fds()
+        self.conns = len(proc.connections())
+        self.conns_local = 0
+        for connection in proc.connections():
+            if connection.raddr and connection.raddr[0]:
+                if RE_LOCAL_IP.match(connection.raddr[0]) \
+                   or connection.raddr[0] == '::1':
+                    self.conns_local += 1
+
+    def accumulate(self, other):
+        self.mem += other.mem
+        self.mempct += other.mempct  ### this is likely wrong
+        self.fds += other.fds
+        self.conns += other.conns
+        self.conns_local += other.conns_local
+        self.age += other.age
+        # cannot accumulate .state
+
+RE_LOCAL_IP = re.compile(r'^(10|192|127)\.')
+
 
 def getuser(pid):
     proc = psutil.Process(pid)
     return proc.username()
 
-def getage(pid):
-    proc = psutil.Process(pid)
-    return proc.create_time()
-
-def getstate(pid):
-    proc = psutil.Process(pid)
-    return proc.status()
-
-def getcons(pid, lan = False):
-    proc = psutil.Process(pid)
-    if not lan:
-        return len(proc.connections())
-    else:
-        lancons = 0
-        for connection in proc.connections():
-            if len(connection.raddr) > 0 and connection.raddr[0]:
-                if re.match(r"^(10|192|127)\.", connection.raddr[0]) or connection.raddr[0] == '::1':
-                    lancons += 1
-        return lancons
 
 # getprocs: Get all processes and their command line stack
 def getprocs():
@@ -105,10 +117,7 @@ def getprocs():
 
 
 
-def checkTriggers(id, alist, triggers, dead = False):
-    if not alist:
-        print("  - No analytical data found, bailing on check!")
-        return None
+def checkTriggers(id, info, triggers, dead = False):
     if len(triggers) > 0:
         print("  - Checking triggers:")
     for trigger, value in triggers.items():
@@ -118,15 +127,15 @@ def checkTriggers(id, alist, triggers, dead = False):
         if trigger == 'maxmemory':
             if value.find("%") != -1: # percentage check
                 maxmem = float(value.replace('%',''))
-                cmem = alist['memory_pct']
+                cmem = info.mempct
                 cvar = '%'
             elif value.find('mb') != -1:    # mb check
-                maxmem = int(value.replace('mb','')) * mb
-                cmem = alist['memory_bytes']
+                maxmem = int(value.replace('mb','')) * MB
+                cmem = info.mem
                 cvar = ' bytes'
             elif value.find('gb') != -1:    # gb check
-                maxmem = int(value.replace('gb','')) * gb
-                cmem = alist['memory_bytes']
+                maxmem = int(value.replace('gb','')) * GB
+                cmem = info.mem
                 cvar = ' bytes'
             lstr = "      - Process '%s' is using %u%s memory, max allowed is %u%s" % (id, cmem+0.5, cvar, maxmem+0.5, cvar)
             print(lstr)
@@ -137,7 +146,7 @@ def checkTriggers(id, alist, triggers, dead = False):
         # maxfds: maximum number of file descriptors
         if trigger == 'maxfds':
             maxfds = int(value)
-            cfds = alist['fds']
+            cfds = info.fds
             lstr = "      - Process '%s' is using %u FDs, max allowed is %u" % (id, cfds, value)
             print(lstr)
             if cfds > maxfds:
@@ -147,7 +156,7 @@ def checkTriggers(id, alist, triggers, dead = False):
         # maxconns: maximum number of open connections
         if trigger == 'maxconns':
             maxconns = int(value)
-            ccons = alist['connections']
+            ccons = info.conns
             lstr = "      - Process '%s' is using %u connections, max allowed is %u" % (id, ccons, value)
             print(lstr)
             if ccons > maxconns:
@@ -157,7 +166,7 @@ def checkTriggers(id, alist, triggers, dead = False):
         # maxlocalconns: maximum number of open connections in local network
         if trigger == 'maxlocalconns':
             maxconns = int(value)
-            ccons = alist['connections_local']
+            ccons = info.conns_local
             lstr ="      - Process '%s' is using %u LAN connections, max allowed is %u" % (id, ccons, value)
             print(lstr)
             if ccons > maxconns:
@@ -168,23 +177,23 @@ def checkTriggers(id, alist, triggers, dead = False):
         if trigger == 'maxage':
             if value.find('s') != -1:    # seconds
                 maxage = int(value.replace('s',''))
-                cage = alist['process_age']
+                cage = info.age
                 cvar = ' seconds'
             elif value.find('m') != -1:    # minutes
                 maxage = int(value.replace('m','')) * 60
-                cage = alist['process_age']
+                cage = info.age
                 cvar = ' minutes'
             elif value.find('h') != -1:    # hours
                 maxage = int(value.replace('h','')) * 360
-                cage = alist['process_age']
+                cage = info.age
                 cvar = ' hours'
             elif value.find('d') != -1:    # days
                 maxage = int(value.replace('d','')) * 86400
-                cage = alist['process_age']
+                cage = info.age
                 cvar = ' days'
             else:
                 maxage = int(value)
-                cage = alist['process_age']
+                cage = info.age
             lstr ="      - Process '%s' is %u seconds old, max allowed is %u" % (id, cage,maxage)
             print(lstr)
             if cage > maxage:
@@ -193,7 +202,7 @@ def checkTriggers(id, alist, triggers, dead = False):
         
         # state: kill processes in a specific state (zombie etc)
         if trigger == 'state':
-            cstate = alist['process_state']
+            cstate = info.state
             lstr ="      - Process '%s' is in state '%s'" % (id, cstate)
             print(lstr)
             if cstate == value:
@@ -201,10 +210,12 @@ def checkTriggers(id, alist, triggers, dead = False):
                 return lstr
     return None
 
-def scanForTriggers():
+def scanForTriggers(config):
     procs = getprocs() # get all current processes
     actions = []
-    if 'rules' in config:
+
+    ### TODO: reindent
+    if True:
 
         # For each rule..
         for id, rule in config['rules'].items():
@@ -262,33 +273,20 @@ def scanForTriggers():
                             pids.append(xpid)
 
             # If proc is running, analyze it
-            analysis = {}
+            analysis = ProcessInfo()  # no pid. accumulator.
             for pid in pids:
-                proca = {}
                 print("  - Found process at PID %u" % pid)
 
                 try:
                     # Get all relevant data from this PID
-                    proca['memory_pct'] = getmempct(pid)
-                    proca['memory_bytes'] = getmem(pid)
-                    proca['fds'] = getfds(pid)
-                    proca['connections'] = getcons(pid)
-                    proca['connections_local'] = getcons(pid, True)
-                    proca['process_age'] = time.time() - getage(pid)
-                    proca['process_state'] = getstate(pid)
+                    info = ProcessInfo(pid)
     
                     # If combining, combine into the analysis hash
                     if 'combine' in rule and rule['combine'] == True:
-                        for k, v in proca.items():
-                            if not k in analysis and ( isinstance(v, int) or isinstance(v, float) ):
-                                analysis[k] = 0
-                            if ( isinstance(v, int) or isinstance(v, float) ):
-                                analysis[k] += v
-                            else:
-                                analysis[k] = ''
+                        analysis.accumulate(info)
                     else:
                         # If running a per-pid test, run it:
-                        err = checkTriggers(id, proca, rule['triggers'])
+                        err = checkTriggers(id, info, rule['triggers'])
                         if err:
                             action = {
                                 'pids': [],
@@ -348,15 +346,25 @@ parser.add_argument("-c", "--config", help="Path to the config file if not in ./
 args = parser.parse_args()
 
 if not args.config:
-    config = yaml.load(open("kif.yaml"))
+    CONFIG = yaml.load(open("kif.yaml"))
 else:
-    config = yaml.load(open(args.config))
+    CONFIG = yaml.load(open(args.config))
 
-def main():
-    global config
-    # Now actually run things
-    actions = scanForTriggers()
-    if len(actions) > 0:
+def main(config):
+    if 'rules' not in config:
+        print('- NO RULES TO CHECK')
+    else:
+        # Now actually run things
+        actions = scanForTriggers(config)
+        if actions:
+            run_actions(config, actions)
+
+    print('KIF run finished!')
+
+
+def run_actions(config, actions):
+        ### TODO: reindent
+
         goods = 0
         bads = 0
         
@@ -397,10 +405,20 @@ def main():
             if 'notifications' in config and 'email' in config['notifications'] and ('email' in (action['notify'] or "email")):
                 ecfg = config['notifications']['email']
                 if 'rcpt' in ecfg and 'from' in ecfg:
-                    subject = "[KIF] %s: triggered %u events" % (me, len(action['runlist']) + len(action['kills'].items()))
-                    msg = """Hullo there,
+                    subject = "[KIF] %s: triggered %u events" % (ME, len(action['runlist']) + len(action['kills'].items()))
+                    msg = TEMPLATE_EMAIL % (ME, action['trigger'], rloutput)
+                    notifyEmail(ecfg['from'], ecfg['rcpt'], subject, msg)
 
-KIF has detectect the following issues on %s:
+            if 'notifications' in config and 'hipchat' in config['notifications'] and ('hipchat' in (action['notify'] or "hipchat")):
+                hcfg = config['notifications']['hipchat']
+                if 'token' in hcfg and 'room' in hcfg:
+                    msg = TEMPLATE_HIPCHAT % (ME, action['trigger'], rloutput)
+                    notifyHipchat(hcfg['room'], hcfg['token'], msg, hcfg['notify'] if 'notify' in hcfg else False)
+
+
+TEMPLATE_EMAIL = """Hullo there,
+
+KIF has detected the following issues on %s:
 
 %s
 
@@ -410,12 +428,9 @@ As a precaution, the following commands were run to fix issues:
 
 With regards and sighs,
 Your loyal KIF service.
-                    """ % (me, action['trigger'], rloutput)
-                    notifyEmail(ecfg['from'], ecfg['rcpt'], subject, msg)
-            if 'notifications' in config and 'hipchat' in config['notifications'] and ('hipchat' in (action['notify'] or "hipchat")):
-                hcfg = config['notifications']['hipchat']
-                if 'token' in hcfg and 'room' in hcfg:
-                    msg = """KIF has detectect the following issues on %s:<br/>
+"""
+
+TEMPLATE_HIPCHAT ="""KIF has detected the following issues on %s:<br/>
 <pre>
 %s
 </pre><br/>
@@ -425,10 +440,8 @@ As a precaution, the following commands were run to fix issues:<br/>
 </pre><br/>
 With regards and sighs,<br/>
 Your loyal KIF service.
-                    """ % (me, action['trigger'], rloutput)
-                    notifyHipchat(hcfg['room'], hcfg['token'], msg, hcfg['notify'] if 'notify' in hcfg else False)
+"""
 
-    print("KIF run finished!")
 
 class Daemonize:
     """A generic daemon class.
@@ -567,41 +580,38 @@ def print(*pargs, **pkwargs):
     else:
         __builtin__.print(*pargs)
 
-if 'logging' in config and 'logfile' in config['logging']:
-    logging.basicConfig(filename=config['logging']['logfile'], format='[%(asctime)s]: %(message)s', level=logging.INFO)
+if 'logging' in CONFIG and 'logfile' in CONFIG['logging']:
+    logging.basicConfig(filename=CONFIG['logging']['logfile'], format='[%(asctime)s]: %(message)s', level=logging.INFO)
 
 
 ## Daemon class
 class MyDaemon(Daemonize):
     def run(self, args):
-
-        interval = 300
-        if 'daemon' in config and 'interval' in config['daemon']:
-            interval = int(config['daemon']['interval'])
+        interval = int(CONFIG.get('daemon', { })
+                       .get('interval', DEFAULT_INTERVAL))
         while True:
-            main()
+            main(CONFIG)
             time.sleep(interval)
 
 # Get started!
 if args.stop:
     print("Stopping Kif")
-    daemon = MyDaemon(pidfile)
+    daemon = MyDaemon(PIDFILE)
     daemon.stop()
 elif args.restart:
     print("Restarting Kif")
-    daemon = MyDaemon(pidfile)
+    daemon = MyDaemon(PIDFILE)
     daemon.restart()
 else:
     if args.daemonize:
-        print("Daemonizing Kif, using %s..." % pidfile)
-        daemon = MyDaemon(pidfile)
+        print("Daemonizing Kif, using %s..." % PIDFILE)
+        daemon = MyDaemon(PIDFILE)
         daemon.start(args)
     elif args.foreground:
-        interval = 300
-        if 'daemon' in config and 'interval' in config['daemon']:
-            interval = int(config['daemon']['interval'])
+        interval = int(CONFIG.get('daemon', { })
+                       .get('interval', DEFAULT_INTERVAL))
         while True:
-            main()
+            main(CONFIG)
             time.sleep(interval)
     else:
-        main()
+        main(CONFIG)
