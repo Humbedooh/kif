@@ -92,14 +92,18 @@ def getcons(pid, lan = False):
 # getprocs: Get all processes and their command line stack
 def getprocs():
     procs = {}
-    for pid in psutil.pids():
+    for p in psutil.process_iter():
         try:
-            p = psutil.Process(pid)
-            content = p.cmdline()
+            pinfo = p.as_dict(attrs=['pid', 'name', 'username', 'status', 'cmdline'])
+            content = pinfo['cmdline']
+            if not content:
+                content = pinfo['name'] # Fall back if no cmdline present
+            pid = pinfo['pid']
             if len(content) > 0 and len(content[0]) > 0:
                 content = [c for c in content if len(c) > 0]
                 procs[pid] = content
-        except Exception:
+        except (psutil.ZombieProcess, psutil.AccessDenied, psutil.NoSuchProcess):
+            print("Could not access process, it might have gone away...")
             continue
     return procs
 
