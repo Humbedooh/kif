@@ -231,12 +231,17 @@ def scanForTriggers(config):
                 print("  - Checking for process %s" % procid)
                 for xpid, cmdline in procs.items():
                     addit = False
+                    xuid = getuser(xpid)
                     if isinstance(procid, str):
                         if " ".join(cmdline).find(rule['procid']) != -1:
                             addit = True
                     elif isinstance(procid, list):
                         if cmdline == procid:
                             addit = True
+                    # If uid is specified and doesn't match here, discard match.
+                    if 'uid' in rule:
+                        if xuid != rule['uid']:
+                            addit = False
                     if addit:
                         if not ('ignore' in rule):
                             addit = True
@@ -257,7 +262,7 @@ def scanForTriggers(config):
             if 'uid' in rule:
                 for xpid, cmdline in procs.items():
                     uid = getuser(xpid)
-                    if uid == rule['uid']:
+                    elif uid == rule['uid']:
                         addit = False
                         if not ('ignore' in rule):
                             addit = True
